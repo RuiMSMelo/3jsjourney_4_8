@@ -4,7 +4,7 @@ import GUI from 'lil-gui'
 import gsap from 'gsap'
 import fireworkVertexShader from './shaders/firework/vertex.glsl'
 import fireworkFragmentShader from './shaders/firework/fragment.glsl'
-import { SceneNode } from 'three/webgpu'
+import { Sky } from 'three/addons/objects/Sky.js'
 
 /**
  * Base
@@ -98,6 +98,7 @@ const createFirework = (count, position, size, texture, radius, color) => {
   // Geometry
   const positionsArray = new Float32Array(count * 3)
   const sizesArray = new Float32Array(count)
+  const timeMultipliersArray = new Float32Array(count)
 
   for (let i = 0; i < count; i++) {
     const i3 = i * 3
@@ -115,6 +116,8 @@ const createFirework = (count, position, size, texture, radius, color) => {
     positionsArray[i3 + 2] = position.z
 
     sizesArray[i] = Math.random()
+
+    timeMultipliersArray[i] = 1 + Math.random()
   }
 
   const geometry = new THREE.BufferGeometry()
@@ -125,6 +128,10 @@ const createFirework = (count, position, size, texture, radius, color) => {
   geometry.setAttribute(
     'aSize',
     new THREE.Float32BufferAttribute(sizesArray, 1)
+  )
+  geometry.setAttribute(
+    'aTimeMultiplier',
+    new THREE.Float32BufferAttribute(timeMultipliersArray, 1)
   )
 
   // Material
@@ -164,25 +171,77 @@ const createFirework = (count, position, size, texture, radius, color) => {
     onComplete: destroy,
   })
 }
-createFirework(
-  100, // Count
-  new THREE.Vector3(), // Position
-  0.5, // Size
-  textures[7], // Texture
-  1, // Radius
-  new THREE.Color('#8affff') // Color
-)
 
-window.addEventListener('click', () => {
-  createFirework(
-    100, // Count
-    new THREE.Vector3(), // Position
-    0.5, // Size
-    textures[7], // Texture
-    1, // Radius
-    new THREE.Color('#8affff') // Color
+/**
+ * Sky
+ */
+
+// Add Sky
+const sky = new Sky()
+sky.scale.setScalar(450000)
+scene.add(sky)
+
+const sun = new THREE.Vector3()
+
+/// GUI
+const effectController = {
+  turbidity: 10,
+  rayleigh: 3,
+  mieCoefficient: 0.005,
+  mieDirectionalG: 0.7,
+  elevation: -2.2,
+  azimuth: 180,
+  exposure: renderer.toneMappingExposure,
+}
+
+function guiChanged() {
+  const uniforms = sky.material.uniforms
+  uniforms['turbidity'].value = effectController.turbidity
+  uniforms['rayleigh'].value = effectController.rayleigh
+  uniforms['mieCoefficient'].value = effectController.mieCoefficient
+  uniforms['mieDirectionalG'].value = effectController.mieDirectionalG
+
+  const phi = THREE.MathUtils.degToRad(90 - effectController.elevation)
+  const theta = THREE.MathUtils.degToRad(effectController.azimuth)
+
+  sun.setFromSphericalCoords(1, phi, theta)
+
+  uniforms['sunPosition'].value.copy(sun)
+
+  renderer.toneMappingExposure = effectController.exposure
+  renderer.render(scene, camera)
+}
+
+gui.add(effectController, 'turbidity', 0.0, 20.0, 0.1).onChange(guiChanged)
+gui.add(effectController, 'rayleigh', 0.0, 4, 0.001).onChange(guiChanged)
+gui
+  .add(effectController, 'mieCoefficient', 0.0, 0.1, 0.001)
+  .onChange(guiChanged)
+gui.add(effectController, 'mieDirectionalG', 0.0, 1, 0.001).onChange(guiChanged)
+gui.add(effectController, 'elevation', -3, 10, 0.01).onChange(guiChanged)
+gui.add(effectController, 'azimuth', -180, 180, 0.1).onChange(guiChanged)
+gui.add(effectController, 'exposure', 0, 1, 0.0001).onChange(guiChanged)
+
+guiChanged()
+
+const createRandomFirework = () => {
+  const count = Math.round(400 + Math.random() * 1000)
+  const position = new THREE.Vector3(
+    (Math.random() - 0.5) * 2,
+    Math.random(),
+    (Math.random() - 0.5) * 2
   )
-})
+  const size = 0.1 + Math.random() * 0.1
+  const texture = textures[Math.floor(Math.random() * textures.length)]
+  const radius = 0.5 + Math.random()
+  const color = new THREE.Color()
+  color.setHSL(Math.random(), 1, 0.7)
+
+  createFirework(count, position, size, texture, radius, color)
+}
+createRandomFirework()
+
+window.addEventListener('click', createRandomFirework)
 
 /**
  * Animate
